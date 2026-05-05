@@ -1,0 +1,42 @@
+# VCP-Mate 依赖清单
+# 安装命令: pip install -r requirements.txt
+#
+# 系统依赖（Debian/Ubuntu）:
+#   apt-get install -y libgl1 libglib2.0-0 portaudio19-dev python3-dev
+
+# --- 核心框架 ---
+flask>=3.0.0
+requests>=2.31.0
+
+# --- 轻量级 (<100MB) ---
+beautifulsoup4>=4.12.0
+edge-tts>=6.1.0
+lxml
+numpy>=1.24.0
+openai>=1.0.0,<2.0.0
+ping3>=4.0.0
+psutil>=5.9.0
+pywifi>=1.1.12
+soundfile>=0.12.0
+zhipuai>=2.1.0
+
+# --- 中量级 (100MB-500MB) ---
+opencv-python>=4.8.0
+rapidocr-openvino>=1.3.0
+sherpa-onnx>=1.10.0
+
+# --- 重量级 (>500MB 或需编译) ---
+pyaudio>=0.2.13
+pygame>=2.5.0
+
+# --- AI / CV ---
+face-recognition>=1.3.0
+homeassistant-api>=4.0.0
+mediapipe>=0.10.0
+ultralytics>=8.0.0
+
+# --- 文档解析 ---
+pdfplumber>=0.10.0
+python-docx>=0.8.11
+
+# sudo apt install cmake libasound-dev portaudio19-dev libportaudio2 libportaudiocpp0
