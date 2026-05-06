@@ -277,7 +277,7 @@ def get_info():
         mmd_url = '/mmd/'
         vmd_url = '/mmd/vmd'
         vrm_url = '/vrm/'
-        settings_url = f"http://{host_ip}:5250"
+        settings_url = '/settings/'
     else:
         # 直接访问时使用绝对 URL
         live2d_url = f"http://{lan_ip}:{live2d_port}"
@@ -582,7 +582,7 @@ def voiceprint_status():
     if is_proxied:
         host = request.headers.get('Host', lan_ip)
         host_ip = host.split(':')[0]
-        settings_url = f"http://{host_ip}:5250"
+        settings_url = '/settings/'
     else:
         settings_url = f"http://{lan_ip}:5250"
     return jsonify({
