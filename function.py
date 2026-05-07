@@ -1,4 +1,5 @@
 import time
+import re
 import cv2
 import psutil
 import pywifi
@@ -180,12 +181,21 @@ def ol_search(msg):  # 联网搜索
     msg = re.sub(r"联网|连网|搜索|查|查询|查找|资料", "", msg)
     try:
         results = search(msg, num_results=5)
-        search_result = results[0].get('abstract') + results[1].get('abstract') + results[2].get('abstract') + results[
-            3].get('abstract') + results[4].get('abstract')
-        answer = function_llm(
-            "你是一个专业的搜索总结助手，我输入我的问题和杂乱的内容，你输出整理好的内容为详细的一段话，不要分段",
-            f"{search_result}。上面是完整的搜索结果，请你根据这些搜索结果，分析并回答我的问题，我的问题是：{msg}？")
-        return answer
+        if not results:
+            return "联网搜索未返回结果，请换个关键词再试"
+        # 安全拼接搜索结果，避免索引越界
+        abstracts = [r.get('abstract', '') for r in results if r.get('abstract')]
+        if not abstracts:
+            return "联网搜索未获取到有效摘要，请换个关键词再试"
+        search_result = '\n'.join(abstracts)
+        try:
+            answer = function_llm(
+                "你是一个专业的搜索总结助手，我输入我的问题和杂乱的内容，你输出整理好的内容为详细的一段话，不要分段",
+                f"{search_result}。上面是完整的搜索结果，请你根据这些搜索结果，分析并回答我的问题，我的问题是：{msg}？")
+            return answer
+        except Exception:
+            # LLM 总结失败时 fallback 返回原始搜索摘要
+            return f"🔍 搜索结果（LLM 总结不可用，直接返回原始摘要）：\n{search_result}"
     except Exception:
         return "联网搜索服务维护中，请一段时间后再试"
 

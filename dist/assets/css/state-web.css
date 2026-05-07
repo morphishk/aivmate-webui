@@ -66,9 +66,9 @@ body {
     position: relative;
     z-index: 1000;
 }
-#status-bar:hover {
+/* #status-bar:hover {
     height: 120px;
-}
+} */
 
 .status-bar-collapsed {
     display: flex;
@@ -77,15 +77,6 @@ body {
     height: 40px;
     padding: 0 16px;
 }
-.status-bar-expanded {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 80px;
-    padding: 0 16px;
-    border-top: 1px solid rgba(0, 150, 255, 0.15);
-}
-
 .status-logo {
     display: flex;
     align-items: center;
@@ -97,17 +88,6 @@ body {
     width: 20px;
     height: 20px;
     margin-right: 6px;
-}
-
-.status-metrics {
-    display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: #a0d0ff;
-}
-.status-metrics span span {
-    color: #4fc3f7;
-    font-weight: bold;
 }
 
 .status-menu {
@@ -161,14 +141,6 @@ body {
     background-color: rgba(0, 80, 150, 0.7);
 }
 .show { display: block; }
-
-/* Expanded metrics row */
-.expanded-metrics-row {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
 
 /* --- Main Content (flex row) --- */
 #main-content {
@@ -542,21 +514,6 @@ body {
     justify-content: space-around;
     flex-wrap: wrap;
 }
-.metric-box {
-    text-align: center;
-    padding: 10px;
-    min-width: 100px;
-}
-.metric-label {
-    font-size: 14px;
-    color: #a0d0ff;
-    margin-bottom: 5px;
-}
-.metric-value {
-    font-size: 24px;
-    font-weight: bold;
-}
-
 /* Chat Container */
 .chat-container {
     display: flex;
@@ -715,17 +672,9 @@ body {
     animation: flashHighlight 1s ease;
 }
 
-/* Voice Bar */
+/* Voice Bar 已移除，功能按钮移至底部输入区域 */
 .voice-bar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    margin-bottom: 8px;
-    padding: 6px 10px;
-    background: rgba(0, 50, 100, 0.4);
-    border-radius: 5px;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: none;
 }
 
 .search-btn {
@@ -970,40 +919,45 @@ body {
 /* Chat Input */
 .chat-input-container {
     display: flex;
-    gap: 6px;
-    align-items: center;
+    flex-direction: column;
+    gap: 8px;
     padding: 8px;
     background: rgba(0, 30, 60, 0.5);
     border-radius: 5px;
 }
 .chat-input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid rgba(0, 150, 255, 0.3);
-    border-radius: 5px;
-    background: rgba(0, 20, 40, 0.6);
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(0, 150, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(0, 10, 20, 0.7);
     color: white;
     font-size: 14px;
     outline: none;
+    resize: none;
+    overflow-y: auto;
+    min-height: 36px;
+    max-height: 90px;
+    line-height: 1.5;
+    box-sizing: border-box;
 }
 .chat-input::placeholder {
     color: #78909c;
 }
-.send-button, .clear-button, .upload-btn {
-    padding: 0 14px;
+.send-button {
+    width: 100%;
+    padding: 10px 14px;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
     white-space: nowrap;
-    height: 36px;
+    height: 40px;
     box-sizing: border-box;
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-}
-.send-button {
     background: #0066cc;
     color: white;
 }
@@ -1163,9 +1117,6 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
     #char-panel {
-        display: none;
-    }
-    .status-metrics {
         display: none;
     }
 }
@@ -1426,4 +1377,433 @@ mark.search-highlight.current {
     font-size: 10px;
     color: #888;
     margin-right: 4px;
+}
+
+/* ===== Agent WebUI Batch 5-7 新增样式 ===== */
+
+/* Textarea 自适应 */
+.chat-input {
+    resize: none;
+    overflow-y: auto;
+    min-height: 36px;
+    max-height: 90px;
+    line-height: 1.5;
+    transition: height 0.15s ease;
+}
+
+/* Toolbar 双层按钮布局 */
+.toolbar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.toolbar-row-primary {
+    justify-content: space-between;
+}
+
+.toolbar-row-secondary {
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.btn-large {
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    background: rgba(0, 80, 150, 0.3);
+    color: #a0d0ff;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex: 1;
+    justify-content: center;
+    min-width: 60px;
+}
+
+.btn-large:hover {
+    background: rgba(0, 100, 200, 0.5);
+}
+
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 150, 255, 0.2);
+    background: rgba(0, 60, 120, 0.3);
+    color: #a0d0ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-icon:hover {
+    background: rgba(0, 100, 200, 0.5);
+}
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+    .btn-large .btn-label {
+        display: none;
+    }
+    .btn-large {
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+        flex: none;
+    }
+}
+
+/* 输入框区域开关 */
+.input-switches {
+    display: flex;
+    gap: 12px;
+    padding: 4px 8px;
+    justify-content: flex-start;
+}
+
+.agent-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #a0d0ff;
+    user-select: none;
+}
+
+.agent-toggle input[type="checkbox"] {
+    appearance: none;
+    width: 28px;
+    height: 16px;
+    background: rgba(100, 100, 100, 0.4);
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.2s;
+}
+
+.agent-toggle input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: #ccc;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.agent-toggle input[type="checkbox"]:checked {
+    background: rgba(0, 150, 255, 0.5);
+}
+
+.agent-toggle input[type="checkbox"]:checked::after {
+    transform: translateX(12px);
+    background: #00ccff;
+}
+
+.agent-toggle.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.agent-toggle input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    background: rgba(100, 100, 100, 0.2);
+}
+
+.agent-toggle input[type="checkbox"]:disabled::after {
+    background: #888;
+}
+
+/* 斜杠命令选择器 */
+.slash-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(0, 20, 40, 0.95);
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    border-radius: 8px;
+    padding: 4px 0;
+    margin-bottom: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 2000;
+    display: none;
+}
+
+.slash-picker.active {
+    display: block;
+}
+
+.slash-picker-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #e0f0ff;
+    transition: background 0.15s;
+}
+
+.slash-picker-item:hover,
+.slash-picker-item.selected {
+    background: rgba(0, 150, 255, 0.2);
+}
+
+.slash-picker-item .cmd-icon {
+    font-size: 16px;
+}
+
+.slash-picker-item .cmd-name {
+    font-weight: bold;
+}
+
+.slash-picker-item .cmd-desc {
+    color: #78909c;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Agent 消息渲染 */
+.agent-card {
+    background: var(--agent-card-bg, rgba(40, 60, 100, 0.3));
+    border: 1px solid var(--agent-card-border, rgba(100, 150, 255, 0.2));
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 8px;
+}
+
+.agent-message-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-secondary, #a0d0ff);
+}
+
+.weather-card .weather-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.weather-city { font-size: 18px; font-weight: bold; color: #e0f0ff; }
+.weather-summary { font-size: 16px; color: #00ccff; }
+.weather-detail { font-size: 13px; color: #a0d0ff; line-height: 1.6; }
+
+.news-list { list-style: none; padding: 0; margin: 0; }
+.news-item {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.1);
+    font-size: 13px;
+    color: #e0f0ff;
+}
+.news-item:last-child { border-bottom: none; }
+
+/* HA 抽屉面板 */
+.panel-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1500;
+    display: none;
+}
+
+.panel-overlay.active {
+    display: block;
+}
+
+.side-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 360px;
+    max-width: 90vw;
+    height: 100%;
+    background: rgba(0, 15, 30, 0.95);
+    border-left: 1px solid rgba(0, 150, 255, 0.2);
+    z-index: 1600;
+    display: none;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+
+.side-panel.active {
+    display: flex;
+    transform: translateX(0);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0, 150, 255, 0.2);
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #e0f0ff;
+}
+
+.panel-close {
+    background: none;
+    border: none;
+    color: #a0d0ff;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.panel-refresh {
+    background: none;
+    border: none;
+    color: #a0d0ff;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.device-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 40, 80, 0.3);
+    border: 1px solid rgba(0, 150, 255, 0.15);
+    border-radius: 8px;
+}
+
+.device-name {
+    font-size: 13px;
+    color: #e0f0ff;
+}
+
+.device-state {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(100, 100, 100, 0.3);
+    color: #a0d0ff;
+}
+
+.device-state.on {
+    background: rgba(0, 200, 100, 0.3);
+    color: #00ff88;
+}
+
+.device-state.off {
+    background: rgba(200, 0, 0, 0.3);
+    color: #ff6666;
+}
+
+.device-toggle {
+    background: rgba(0, 100, 200, 0.3);
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    color: #a0d0ff;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.device-toggle:hover {
+    background: rgba(0, 150, 255, 0.4);
+}
+
+/* Agent 参数弹窗 */
+.agent-param-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.agent-param-overlay.active {
+    display: flex;
+}
+
+.agent-param-dialog {
+    background: rgba(0, 20, 40, 0.95);
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    border-radius: 12px;
+    padding: 20px;
+    width: 320px;
+    max-width: 90vw;
+}
+
+.agent-param-dialog h4 {
+    margin: 0 0 12px 0;
+    color: #e0f0ff;
+    font-size: 15px;
+}
+
+.agent-param-dialog input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid rgba(0, 150, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(0, 20, 40, 0.6);
+    color: white;
+    font-size: 14px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.agent-param-dialog .dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.agent-param-dialog .dialog-actions button {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.agent-param-dialog .btn-cancel {
+    background: rgba(100, 100, 100, 0.3);
+    color: #a0d0ff;
+}
+
+.agent-param-dialog .btn-confirm {
+    background: #0066cc;
+    color: white;
 }

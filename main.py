@@ -7,11 +7,13 @@ from live2d import run_live2d
 from mmd import run_mmd
 from vrm import run_vrm
 from web_state import run_state_web
-from web_settings import run_settings_web, username, welcome_voice_switch, mate_name
+from web_settings import run_settings_web, username, welcome_voice_switch, mate_name, load_config
 from function import get_lan_url, stop_tts
 from tts import play_tts_legacy as play_tts
 from llm import chat_preprocess
 from archive import _start_archive_timer
+from agents.agent_registry import AgentRegistry
+from conversation import list_sessions, save_message
 
 
 import os
@@ -78,7 +80,27 @@ def text_chat():  # 文本聊天线程
 def run_ase():  # 主动感知对话线程
     def ase_chat(msg):
         print(f"{mate_name}主动感知并发起了聊天")
-        chat_preprocess(msg)
+        res = chat_preprocess(msg)
+
+        # WebUI 兼容：将 ASE 消息保存到当前活跃 Web 会话
+        try:
+            current_web_session = None
+            try:
+                with open("data/db/current_web_session.txt", "r", encoding="utf-8") as f:
+                    current_web_session = f.read().strip()
+            except Exception:
+                pass
+            if current_web_session:
+                session = get_session(current_web_session)
+                if session and not session.get('is_archived'):
+                    save_message(current_web_session, 'assistant', content=res or msg)
+                    return
+            # 兜底：若未找到活跃 Web 会话，保存到最新会话
+            sessions = list_sessions(limit=1)
+            if sessions and not sessions[0].get('is_archived'):
+                save_message(sessions[0]['id'], 'assistant', content=res or msg)
+        except Exception as e:
+            print(f"[ASE] 保存到会话失败: {e}")
 
     def ase_hello():
         current_hour = datetime.now().time().hour
@@ -105,12 +127,14 @@ def run_ase():  # 主动感知对话线程
 
     while True:
         time.sleep(random.randint(180, 600))
-        with open("data/db/current_ase.txt", "r", encoding="utf-8") as f:
-            current_ase = f.read()
-        if current_ase == "on":
-            ase_function = random.choice([ase_hello, ase_news, ase_weather, ase_vlm_cam, ase_context])
-            print(ase_function)
-            ase_function()
+        try:
+            cfg = load_config()
+            if cfg.get('agent_ase') == 'on':
+                ase_function = random.choice([ase_hello, ase_news, ase_weather, ase_vlm_cam, ase_context])
+                print(ase_function)
+                ase_function()
+        except Exception as e:
+            print(f"[ASE] 异常: {e}")
 
 
 def play_welcome():
@@ -124,6 +148,7 @@ def play_welcome():
         print(f"[Welcome] 音频播放跳过（无音频设备）: {e}")
 
 
+AgentRegistry.discover_and_register()
 Thread(target=run_state_web, daemon=True).start()
 Thread(target=run_live2d, daemon=True).start()
 Thread(target=run_mmd, daemon=True).start()

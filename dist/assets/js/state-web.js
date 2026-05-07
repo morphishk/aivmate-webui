@@ -188,13 +188,13 @@
             }
 
             window.userInteracted = false;
-            const autoVoiceCheckbox = document.getElementById('autoVoice');
             const ttsStatusEl = document.getElementById('tts-status');
             const voiceHintEl = document.getElementById('voice-hint');
 
-            // 恢复自动朗读开关状态
-            const savedAutoVoice = localStorage.getItem('autoVoice');
-            autoVoiceCheckbox.checked = savedAutoVoice === null ? true : savedAutoVoice === 'true';
+            function getAutoVoiceState() {
+                const cb = document.getElementById('autoVoice');
+                return cb ? cb.checked : (localStorage.getItem('autoVoice') !== 'false');
+            }
 
             // ===== ASR 模式切换 =====
             const ASRState = {
@@ -214,15 +214,18 @@
             let asrMode = localStorage.getItem('asrMode') || 'vad';
 
             function initAsrModeSelector() {
-                const voiceBar = document.querySelector('.voice-bar');
-                if (!voiceBar || document.getElementById('asr-mode-selector')) return;
+                if (document.getElementById('asr-mode-selector')) return;
                 const selector = document.createElement('div');
                 selector.id = 'asr-mode-selector';
                 selector.className = 'asr-mode-selector';
                 selector.innerHTML = '<span>🎤</span>' +
                     '<label><input type="radio" name="asrMode" value="vad" ' + (asrMode === 'vad' ? 'checked' : '') + '> VAD自动</label>' +
                     '<label><input type="radio" name="asrMode" value="hold" ' + (asrMode === 'hold' ? 'checked' : '') + '> 按住说话</label>';
-                voiceBar.appendChild(selector);
+                // 添加到底部控制栏
+                const secondaryRow = document.querySelector('.toolbar-row-secondary');
+                if (secondaryRow) {
+                    secondaryRow.appendChild(selector);
+                }
                 selector.querySelectorAll('input[name="asrMode"]').forEach(function(radio) {
                     radio.addEventListener('change', function() {
                         setAsrMode(this.value);
@@ -237,9 +240,9 @@
                 resetAllRecordingState();
                 const radios = document.querySelectorAll('input[name="asrMode"]');
                 radios.forEach(function(r) { r.checked = (r.value === mode); });
-                const micBtn = document.getElementById('mic-btn');
-                if (micBtn) {
-                    micBtn.title = mode === 'hold' ? '按住说话（或按空格键）' : '语音输入（VAD自动监听）';
+                const toolbarVoiceBtn = document.querySelector('#agent-toolbar [data-action="voice"]');
+                if (toolbarVoiceBtn) {
+                    toolbarVoiceBtn.title = mode === 'hold' ? '按住说话（或按空格键）' : '语音输入（VAD自动监听）';
                 }
                 showStatusToast('已切换到' + (mode === 'vad' ? 'VAD自动监听' : '按住说话') + '模式');
             }
@@ -279,16 +282,18 @@
                 setTimeout(function() { toast.remove(); }, 2000);
             }
 
-            autoVoiceCheckbox.addEventListener('change', function() {
-                localStorage.setItem('autoVoice', autoVoiceCheckbox.checked);
+            document.addEventListener('change', function(e) {
+                if (e.target && e.target.id === 'autoVoice') {
+                    localStorage.setItem('autoVoice', e.target.checked);
+                }
             });
 
-            if (window.location.protocol === 'http:') {
+            if (window.location.protocol === 'http:' && voiceHintEl) {
                 voiceHintEl.style.display = 'block';
             }
             document.addEventListener('click', function onFirstClick() {
                 window.userInteracted = true;
-                voiceHintEl.style.display = 'none';
+                if (voiceHintEl) voiceHintEl.style.display = 'none';
                 document.removeEventListener('click', onFirstClick);
             }, { once: true });
 
@@ -300,11 +305,14 @@
             let activeTtsPollTimer = null;
 
             function updateTtsStatus() {
+                const el = document.getElementById('tts-status');
                 if (ttsQueue.length > 0 && ttsIndex < ttsQueue.length) {
-                    ttsStatusEl.textContent = '🔊 正在播放 ' + (ttsIndex + 1) + '/' + ttsQueue.length;
-                    ttsStatusEl.classList.add('show');
+                    if (el) {
+                        el.textContent = '🔊 正在播放 ' + (ttsIndex + 1) + '/' + ttsQueue.length;
+                        el.classList.add('show');
+                    }
                 } else {
-                    ttsStatusEl.classList.remove('show');
+                    if (el) el.classList.remove('show');
                 }
             }
 
@@ -694,7 +702,9 @@
                                     file_name: m.file_name,
                                     file_path: m.file_path,
                                     created_at: m.created_at,
-                                    timestamp: m.timestamp
+                                    timestamp: m.timestamp,
+                                    agent_id: m.agent_id,
+                                    agent_result: m.agent_result
                                 };
                             });
                             localStorage.setItem('lastSessionId', sessionId);
@@ -1233,24 +1243,6 @@
                 fetch('./api/info')
                    .then(function(response) { return response.json(); })
                    .then(function(data) {
-                        document.getElementById('cpu_percent').textContent = data.cpu_percent + '%';
-                        document.getElementById('memory_percent').textContent = data.memory_percent + '%';
-                        document.getElementById('temp').textContent = data.temp + '℃';
-                        document.getElementById('wan_info').textContent = data.wan_info;
-                        document.getElementById('lan_info').textContent = data.lan_info;
-                        document.getElementById('wifi_info').textContent = data.wifi_info;
-                        const cpuExp = document.getElementById('cpu_percent_exp');
-                        const memExp = document.getElementById('memory_percent_exp');
-                        const tempExp = document.getElementById('temp_exp');
-                        const wanExp = document.getElementById('wan_info_exp');
-                        const lanExp = document.getElementById('lan_info_exp');
-                        const wifiExp = document.getElementById('wifi_info_exp');
-                        if (cpuExp) cpuExp.textContent = data.cpu_percent + '%';
-                        if (memExp) memExp.textContent = data.memory_percent + '%';
-                        if (tempExp) tempExp.textContent = data.temp + '℃';
-                        if (wanExp) wanExp.textContent = data.wan_info;
-                        if (lanExp) lanExp.textContent = data.lan_info;
-                        if (wifiExp) wifiExp.textContent = data.wifi_info;
                         live2dUrl.href = data.live2d_url;
                         mmdUrl.href = data.mmd_url;
                         vmdUrl.href = data.vmd_url;
@@ -1413,7 +1405,7 @@
                 }
 
                 // 3. 触发 TTS 自动朗读（仅当用户仍在原会话时）
-                if (autoVoiceCheckbox.checked && window.userInteracted && AppState.currentSessionId === requestSessionId) {
+                if (getAutoVoiceState() && window.userInteracted && AppState.currentSessionId === requestSessionId) {
                     fetch('./api/tts_segment', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1474,6 +1466,39 @@
                     AppState._renderSessionList();
 
                     if (data.status === 'success') {
+                        // 先渲染 history 中的 agent 消息（如搜索结果卡片）
+                        if (data.history && Array.isArray(data.history) && AppState.currentSessionId === requestSessionId) {
+                            data.history.forEach(function(histMsg) {
+                                // 跳过将由 data.response 单独渲染的最新 assistant 消息
+                                if (histMsg.role === 'assistant' && histMsg.content === data.response) {
+                                    return;
+                                }
+                                const exists = AppState.conversationHistory.some(function(m) {
+                                    if (m.id && histMsg.id) {
+                                        return m.id === histMsg.id;
+                                    }
+                                    // 前端消息可能没有 id，fallback 比较 role + content
+                                    return m.role === histMsg.role && m.content === histMsg.content;
+                                });
+                                if (!exists) {
+                                    const mappedMsg = {
+                                        id: histMsg.id,
+                                        role: histMsg.role,
+                                        content: histMsg.content,
+                                        image_url: histMsg.image_path ? '/api/sessions/' + requestSessionId + '/images/' + histMsg.image_path.split('/').pop() : null,
+                                        file_name: histMsg.file_name,
+                                        file_path: histMsg.file_path,
+                                        created_at: histMsg.created_at,
+                                        timestamp: histMsg.timestamp,
+                                        agent_id: histMsg.agent_id,
+                                        agent_result: histMsg.agent_result
+                                    };
+                                    AppState.pushMessage(mappedMsg);
+                                    appendMessage(mappedMsg);
+                                }
+                            });
+                        }
+
                         const assistantMsg = {
                             role: 'assistant',
                             content: data.response,
@@ -1485,7 +1510,7 @@
                             appendMessage(assistantMsg);
                         }
 
-                        if (autoVoiceCheckbox.checked && window.userInteracted && AppState.currentSessionId === requestSessionId) {
+                        if (getAutoVoiceState() && window.userInteracted && AppState.currentSessionId === requestSessionId) {
                             fetch('./api/tts_segment', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1592,7 +1617,9 @@
                 AppState.pushMessage(userMsg);
                 appendMessage(userMsg);
 
-                document.getElementById('chat_input').value = '';
+                const _chatInputReset = document.getElementById('chat_input');
+                _chatInputReset.value = '';
+                _chatInputReset.style.height = 'auto';
                 stopTts();
 
                 const requestSessionId = AppState.currentSessionId;
@@ -1632,16 +1659,24 @@
                 }
             });
 
-            document.getElementById('chat_input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
+            const chatInputEl = document.getElementById('chat_input');
+            chatInputEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
                     document.getElementById('send_button').click();
                 }
             });
+            chatInputEl.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 90) + 'px';
+            });
 
             // ===== clearButton 改造：新建会话 =====
-            clearButton.addEventListener('click', function() {
-                AppState.createNewSession();
-            });
+            if (clearButton) {
+                clearButton.addEventListener('click', function() {
+                    AppState.createNewSession();
+                });
+            }
 
             // ===== 浏览器麦克风连续监听与自动断句 =====
             const SILENCE_THRESHOLD = 20;
@@ -1658,6 +1693,9 @@
 
             let isListening = false;
             let isRecordingSegment = false;
+            let isTogglingMic = false;
+            let lastMicToggleTime = 0;
+            const MIC_TOGGLE_DEBOUNCE = 300;
             const _submitState = {};
             Object.defineProperty(_submitState, "isSubmitting", {
                 get: function() { return this._val; },
@@ -1713,14 +1751,64 @@
                 }
             }
 
+            // ===== VoiceController 独立状态机（解耦 DOM 操作）=====
+            const VoiceController = {
+                _state: 'idle',
+                _listeners: [],
+
+                setState(state) {
+                    this._state = state;
+                    this._listeners.forEach(function(fn) { fn(state); });
+                },
+
+                onChange(fn) {
+                    this._listeners.push(fn);
+                },
+
+                getButtonHTML() {
+                    const map = {
+                        idle: '🎤',
+                        listening: '🔴 监听中...',
+                        recording: '🔴 录音中...',
+                        processing: '⏳ 处理中...',
+                    };
+                    return map[this._state] || '🎤';
+                },
+
+                getButtonStyle() {
+                    const active = this._state !== 'idle';
+                    return active
+                        ? { width: 'auto', minWidth: '80px', padding: '0 10px', borderRadius: '5px', whiteSpace: 'nowrap', fontSize: '13px', backgroundColor: '#cc0000' }
+                        : { width: '', padding: '', borderRadius: '', whiteSpace: '', fontSize: '', minWidth: '', backgroundColor: '' };
+                }
+            };
+
+            // AgentToolbar voice 按钮注册 UI 更新回调
+            VoiceController.onChange(function(state) {
+                const btn = document.querySelector('#agent-toolbar [data-action="voice"]');
+                if (!btn) return;
+                btn.innerHTML = VoiceController.getButtonHTML();
+                const style = VoiceController.getButtonStyle();
+                Object.keys(style).forEach(function(key) {
+                    btn.style[key] = style[key];
+                });
+            });
+
             async function _toggleMic() {
-                if (asrMode === 'hold') {
+                if (asrMode === 'hold' || isTogglingMic) {
                     return;
                 }
+                const now = Date.now();
+                if (now - lastMicToggleTime < MIC_TOGGLE_DEBOUNCE) {
+                    return;
+                }
+                lastMicToggleTime = now;
+                isTogglingMic = true;
                 checkVoiceprintBeforeRecord();
 
                 if (isListening) {
                     _stopListening();
+                    isTogglingMic = false;
                     return;
                 }
                 try {
@@ -1732,7 +1820,7 @@
                     source.connect(vadAnalyser);
 
                     isListening = true;
-                    _updateMicButton('🔴 监听中...');
+                    VoiceController.setState('listening');
                     // console.log('[Mic] 监听启动，开始 VAD 检测');
 
                     _detectSpeechLoop();
@@ -1747,6 +1835,8 @@
                 } catch (err) {
                     console.error('[Mic] 启动失败:', err);
                     alert('麦克风启动失败: ' + err.message);
+                } finally {
+                    isTogglingMic = false;
                 }
             }
 
@@ -1765,20 +1855,8 @@
                 if (vadRafId) { cancelAnimationFrame(vadRafId); vadRafId = null; }
                 vadAnalyser = null;
                 currentSegmentRecorder = null;
-                _updateMicButton('🎤');
+                VoiceController.setState('idle');
                 // console.log('[Mic] 监听已完全停止');
-            }
-
-            function _updateMicButton(html) {
-                const btn = document.getElementById('mic-btn');
-                if (btn) {
-                    btn.innerHTML = html;
-                    if (asrMode === 'hold') {
-                        btn.style.backgroundColor = (asrState === ASRState.RECORDING) ? '#cc0000' : '#660000';
-                    } else {
-                        btn.style.backgroundColor = isListening ? '#cc0000' : '#660000';
-                    }
-                }
             }
 
             function _detectSpeechLoop() {
@@ -1842,7 +1920,7 @@
                 currentSegmentRecorder.onstop = function() {
                     // console.log('[Rec] 录制停止，收集到', chunks.length, '块音频');
                     isRecordingSegment = false;
-                    _updateMicButton('🔴 监听中...');
+                    VoiceController.setState('listening');
 
                     if (chunks.length === 0) {
                         console.warn('[Rec] 无音频数据，跳过提交');
@@ -1859,7 +1937,7 @@
                 };
 
                 isRecordingSegment = true;
-                _updateMicButton('🔴 录音中...');
+                VoiceController.setState('recording');
                 // console.log('[Rec] 开始新录制段, MediaRecorder 状态:', currentSegmentRecorder.state);
 
                 currentSegmentRecorder.start(100);
@@ -1905,10 +1983,17 @@
                     // console.log('[ASR] 返回:', data);
 
                     if (data.text && data.text.trim()) {
-                        document.getElementById('chat_input').value = data.text.trim();
+                        const ci = document.getElementById('chat_input');
+                        ci.value = data.text.trim();
+                        ci.style.height = 'auto';
+                        ci.style.height = Math.min(ci.scrollHeight, 90) + 'px';
+                        _submitState.isSubmitting = false; // 解锁，否则 send_button click 会 return
                         document.getElementById('send_button').click();
-                        asrState = ASRState.IDLE;
-                        _updateMicButton('🎤');
+                        // VAD 模式下保持监听，不重置按钮；hold 模式才重置
+                        if (asrMode === 'hold') {
+                            asrState = ASRState.IDLE;
+                            VoiceController.setState('idle');
+                        }
                     } else {
                         console.warn('[ASR] 返回空文本');
                         _submitState.isSubmitting = false;
@@ -1923,8 +2008,14 @@
 
             // ===== 按住说话模式 =====
             async function onHoldStart() {
-                if (asrState !== ASRState.IDLE) return;
+                if (asrState !== ASRState.IDLE || isTogglingMic) return;
                 if (asrMode !== 'hold') return;
+                const now = Date.now();
+                if (now - lastMicToggleTime < MIC_TOGGLE_DEBOUNCE) {
+                    return;
+                }
+                lastMicToggleTime = now;
+                isTogglingMic = true;
                 stopTts();
                 asrState = ASRState.RECORDING;
                 recordingStartTime = Date.now();
@@ -1950,7 +2041,7 @@
                     };
                     mediaRecorder.start(100);
                     startWaveform(holdMicStream);
-                    _updateMicButton('🔴 录音中...');
+                    VoiceController.setState('recording');
                 } catch (err) {
                     console.error('[Hold] 启动失败:', err);
                     asrState = ASRState.IDLE;
@@ -1969,12 +2060,13 @@
                     }
                     cleanupHoldResources();
                     asrState = ASRState.IDLE;
-                    _updateMicButton('🎤');
+                    VoiceController.setState('idle');
+                    isTogglingMic = false;
                     return;
                 }
                 asrState = ASRState.PROCESSING;
                 _submitState.isSubmitting = true;
-                _updateMicButton('⏳ 处理中...');
+                VoiceController.setState('processing');
                 if (mediaRecorder && mediaRecorder.state === 'recording') {
                     mediaRecorder.stop();
                 }
@@ -1992,24 +2084,30 @@
                     const data = await res.json();
                     // console.log('[Hold] ASR 返回:', data);
                     if (data.text && data.text.trim()) {
-                        document.getElementById('chat_input').value = data.text.trim();
+                        const ci = document.getElementById('chat_input');
+                        ci.value = data.text.trim();
+                        ci.style.height = 'auto';
+                        ci.style.height = Math.min(ci.scrollHeight, 90) + 'px';
+                        _submitState.isSubmitting = false; // 解锁，否则 send_button click 会 return
                         document.getElementById('send_button').click();
                         asrState = ASRState.IDLE;
-                        _updateMicButton('🎤');
+                        VoiceController.setState('idle');
                     } else {
                         showStatusToast('未能识别语音，请重试');
                         _submitState.isSubmitting = false;
                         asrState = ASRState.IDLE;
-                        _updateMicButton('🎤');
+                        VoiceController.setState('idle');
                     }
                 } catch (e) {
                     console.error('[Hold] ASR 失败:', e);
                     showStatusToast('语音识别失败');
                     _submitState.isSubmitting = false;
                     asrState = ASRState.IDLE;
-                    _updateMicButton('🎤');
+                    VoiceController.setState('idle');
+                } finally {
+                    isTogglingMic = false;
+                    cleanupHoldResources();
                 }
-                cleanupHoldResources();
             }
 
             function cleanupHoldResources() {
@@ -2042,8 +2140,8 @@
                     canvas.id = 'waveform-canvas';
                     canvas.width = 200;
                     canvas.height = 40;
-                    const voiceBar = document.querySelector('.voice-bar');
-                    if (voiceBar) voiceBar.appendChild(canvas);
+                    const secondaryRow = document.querySelector('.toolbar-row-secondary');
+                    if (secondaryRow) secondaryRow.appendChild(canvas);
                 }
                 canvas.style.display = 'block';
                 holdAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2112,27 +2210,29 @@
 
             // 麦克风按钮按住说话事件绑定
             function bindHoldEvents() {
-                const micBtn = document.getElementById('mic-btn');
-                if (!micBtn) return;
-                micBtn.addEventListener('mousedown', function(e) {
+                const toolbarVoiceBtn = document.querySelector('#agent-toolbar [data-action="voice"]');
+                if (!toolbarVoiceBtn) return;
+                if (toolbarVoiceBtn.dataset.holdEventsBound === 'true') return;
+                toolbarVoiceBtn.dataset.holdEventsBound = 'true';
+                toolbarVoiceBtn.addEventListener('mousedown', function(e) {
                     if (asrMode === 'hold') {
                         e.preventDefault();
                         onHoldStart();
                     }
                 });
-                micBtn.addEventListener('mouseup', function() {
+                toolbarVoiceBtn.addEventListener('mouseup', function() {
                     if (asrMode === 'hold') onHoldEnd();
                 });
-                micBtn.addEventListener('mouseleave', function() {
+                toolbarVoiceBtn.addEventListener('mouseleave', function() {
                     if (asrMode === 'hold' && asrState === ASRState.RECORDING) onHoldEnd();
                 });
-                micBtn.addEventListener('touchstart', function(e) {
+                toolbarVoiceBtn.addEventListener('touchstart', function(e) {
                     if (asrMode === 'hold') {
                         e.preventDefault();
                         onHoldStart();
                     }
                 });
-                micBtn.addEventListener('touchend', function() {
+                toolbarVoiceBtn.addEventListener('touchend', function() {
                     if (asrMode === 'hold') onHoldEnd();
                 });
             }
@@ -2148,14 +2248,15 @@
                         localStorage.setItem('asrMode', asrMode);
                         initAsrModeSelector();
                         bindHoldEvents();
-                        const micBtn = document.getElementById('mic-btn');
-                        if (micBtn) {
-                            micBtn.title = asrMode === 'hold' ? '按住说话（或按空格键）' : '语音输入（VAD自动监听）';
-                        }
+                        const toolbarVoiceBtn = document.querySelector('#agent-toolbar [data-action="voice"]');
+                        const title = asrMode === 'hold' ? '按住说话（或按空格键）' : '语音输入（VAD自动监听）';
+                        if (toolbarVoiceBtn) toolbarVoiceBtn.title = title;
                     })
                     .catch(function() {
                         initAsrModeSelector();
                         bindHoldEvents();
+                        const toolbarVoiceBtn2 = document.querySelector('#agent-toolbar [data-action="voice"]');
+                        if (toolbarVoiceBtn2) toolbarVoiceBtn2.title = asrMode === 'hold' ? '按住说话（或按空格键）' : '语音输入（VAD自动监听）';
                     });
             }
             initAsrModeFromServer();
@@ -2316,6 +2417,27 @@
                 });
             });
 
+            // 重写 renderSingleMessage，支持 Agent 消息渲染
+            const _originalRenderSingleMessage = renderSingleMessage;
+            renderSingleMessage = function(msg, index) {
+                if (msg.agent_id && msg.agent_result) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `message ${msg.role}`;
+                    msgDiv.dataset.index = index;
+                    const bubble = document.createElement('div');
+                    bubble.className = 'message-bubble';
+                    AgentMessageRenderer.render(msg, bubble);
+                    msgDiv.appendChild(bubble);
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'message-time';
+                    timeSpan.textContent = msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString() : '';
+                    msgDiv.appendChild(timeSpan);
+                    chatMessages.appendChild(msgDiv);
+                    return msgDiv;
+                }
+                return _originalRenderSingleMessage(msg, index);
+            };
+
             // ===== 初始化 AppState =====
             AppState.init();
 
@@ -2362,6 +2484,13 @@
                     const data = await res.json();
                     if (data.status === 'success') {
                         showToast('已切换为：' + (preset === 'balanced' ? '日常聊天' : preset === 'analysis' ? '深度分析' : '创意发散'));
+                        localStorage.setItem('llm_preset', preset);
+                        const presetLabels = { balanced: '日常', analysis: '深度', creative: '创意' };
+                        const personaBtn = document.querySelector('#agent-toolbar [data-action="persona"]');
+                        if (personaBtn) {
+                            const labelSpan = personaBtn.querySelector('.btn-label');
+                            if (labelSpan) labelSpan.textContent = presetLabels[preset] || '日常';
+                        }
                     } else {
                         showToast('预设保存失败：' + (data.message || '未知错误'));
                     }
@@ -2377,6 +2506,66 @@
                 presetSelect.addEventListener('change', function() {
                     savePreset(this.value);
                 });
+            }
+
+            // ===== AI 回复风格切换面板 =====
+            function showPersonaSwitcher() {
+                let panel = document.getElementById('persona-switcher-panel');
+                if (panel) {
+                    panel.remove();
+                    return;
+                }
+
+                const btn = document.querySelector('#agent-toolbar [data-action="persona"]');
+                const btnRect = btn ? btn.getBoundingClientRect() : null;
+
+                panel = document.createElement('div');
+                panel.id = 'persona-switcher-panel';
+                panel.style.cssText = 'position:fixed;background:#1e1e1e;border:1px solid #444;border-radius:8px;padding:8px;min-width:160px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+
+                if (btnRect) {
+                    const panelHeight = 140;
+                    let top = btnRect.top - panelHeight;
+                    if (top < 10) top = btnRect.bottom + 10;
+                    panel.style.top = top + 'px';
+                    panel.style.left = Math.max(10, btnRect.left) + 'px';
+                } else {
+                    panel.style.bottom = '120px';
+                    panel.style.left = '10px';
+                }
+
+                const presets = [
+                    { key: 'balanced', label: '💬 日常聊天', desc: '平衡自然的对话风格' },
+                    { key: 'analysis', label: '🔍 深度分析', desc: '严谨细致的推理风格' },
+                    { key: 'creative', label: '✨ 创意发散', desc: '开放活跃的创造风格' }
+                ];
+                const current = localStorage.getItem('llm_preset') || 'balanced';
+
+                panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                    '<strong style="color:#fff;">💬 切换风格</strong>' +
+                    '<button onclick="document.getElementById(\'persona-switcher-panel\').remove()" style="background:none;border:none;color:#999;cursor:pointer;">✕</button>' +
+                    '</div>';
+
+                presets.forEach(function(p) {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'padding:8px 10px;cursor:pointer;color:#ddd;border-radius:4px;' + (p.key === current ? 'background:#2d4a6e;' : '');
+                    item.innerHTML = '<div style="font-size:14px;">' + p.label + '</div><div style="font-size:11px;color:#888;">' + p.desc + '</div>';
+                    item.onmouseenter = function() { if (p.key !== current) this.style.background = '#333'; };
+                    item.onmouseleave = function() { if (p.key !== current) this.style.background = 'transparent'; };
+                    item.onclick = function() {
+                        savePreset(p.key);
+                        document.getElementById('persona-switcher-panel').remove();
+                        // 更新按钮文字
+                        const personaBtn = document.querySelector('#agent-toolbar [data-action="persona"]');
+                        if (personaBtn) {
+                            const labelSpan = personaBtn.querySelector('.btn-label');
+                            if (labelSpan) labelSpan.textContent = p.label.split(' ')[1];
+                        }
+                    };
+                    panel.appendChild(item);
+                });
+
+                document.body.appendChild(panel);
             }
 
             // ===== 模型切换面板（P3 Day 5 新增） =====
@@ -3001,6 +3190,772 @@
                     this.currentIndex = -1;
                 }
             };
+
+            // ===== Agent WebUI 模块 =====
+
+            const AgentStore = {
+                agents: [],
+                isLoading: false,
+                lastError: null,
+
+                async init() {
+                    try {
+                        const res = await fetch('./api/agents');
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            this.agents = data.agents;
+                        }
+                    } catch (e) {
+                        console.error('[AgentStore] 加载 Agent 列表失败', e);
+                    }
+                },
+
+                getToolbarAgents() {
+                    return this.agents.filter(a => a.triggers && a.triggers.includes('toolbar'));
+                },
+
+                getSlashAgents() {
+                    return this.agents.filter(a => a.triggers && a.triggers.includes('slash'));
+                },
+
+                matchSlashCommand(text) {
+                    if (!text.startsWith('/')) return null;
+                    const cmd = text.split(' ')[0].toLowerCase();
+                    return this.agents.find(a =>
+                        a.slash_commands && a.slash_commands.includes(cmd)
+                    );
+                },
+
+                async execute(agentId, params, sessionId) {
+                    const res = await fetch(`./api/agent/${agentId}`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({params, session_id: sessionId})
+                    });
+                    return res.json();
+                }
+            };
+
+            const ToggleSwitches = {
+                CONFIG_MAP: {
+                    websearch: 'agent_websearch',
+                    ase: 'agent_ase',
+                    face: 'agent_face'
+                },
+
+                async _checkCamera() {
+                    let stream = null;
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({video: true});
+                        const track = stream.getVideoTracks()[0];
+                        const label = (track.label || '').toLowerCase();
+
+                        // 虚拟摄像头黑名单（无真实相机连接时输出黑屏/Logo）
+                        const virtualKeywords = ['imaging edge', 'obs', 'virtual camera', 'manycam', 'snap', 'youcam', 'xsplit', 'epoccam', 'droidcam'];
+                        const isVirtual = virtualKeywords.some(function(kw) { return label.includes(kw); });
+                        if (isVirtual) {
+                            stream.getTracks().forEach(function(t) { t.stop(); });
+                            return false;
+                        }
+
+                        // 进一步检查画面是否全黑（全黑视为无真实视频输入）
+                        const video = document.createElement('video');
+                        video.srcObject = stream;
+                        video.muted = true;
+                        video.play();
+                        await new Promise(function(r) { setTimeout(r, 500); });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth || 640;
+                        canvas.height = video.videoHeight || 480;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+                        let hasContent = false;
+                        for (let i = 0; i < data.length; i += 16) {
+                            if (data[i] > 15 || data[i+1] > 15 || data[i+2] > 15) {
+                                hasContent = true;
+                                break;
+                            }
+                        }
+                        stream.getTracks().forEach(function(t) { t.stop(); });
+                        return hasContent;
+                    } catch (e) {
+                        if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+                        return false;
+                    }
+                },
+
+                _setToggleDisabled(id, disabled, title) {
+                    const el = document.getElementById(id);
+                    const label = el ? el.closest('.agent-toggle') : null;
+                    if (el) {
+                        el.disabled = disabled;
+                        if (disabled && el.checked) {
+                            el.checked = false;
+                            this.save(this.CONFIG_MAP[id.replace('toggle-', '')], 'off');
+                        }
+                    }
+                    if (label) {
+                        if (disabled) {
+                            label.classList.add('disabled');
+                            if (title) label.title = title;
+                        } else {
+                            label.classList.remove('disabled');
+                        }
+                    }
+                },
+
+                _updateAseState() {
+                    const faceEl = document.getElementById('toggle-face');
+                    const faceOn = faceEl && faceEl.checked;
+                    this._setToggleDisabled('toggle-ase', !faceOn, '请先开启人脸功能');
+                },
+
+                async load() {
+                    try {
+                        const res = await fetch('./api/get_config');
+                        const config = await res.json();
+                        const setToggle = (id, key) => {
+                            const el = document.getElementById(id);
+                            if (el) el.checked = config[key] === 'on';
+                        };
+                        setToggle('toggle-websearch', this.CONFIG_MAP.websearch);
+                        setToggle('toggle-face', this.CONFIG_MAP.face);
+                        setToggle('toggle-ase', this.CONFIG_MAP.ase);
+
+                        // 检测摄像头，无人脸设备则禁用人脸开关
+                        const hasCamera = await this._checkCamera();
+                        this._setToggleDisabled('toggle-face', !hasCamera, '未检测到摄像头');
+
+                        // 人脸未开启则禁用感知开关
+                        this._updateAseState();
+                    } catch (e) {
+                        console.error('[ToggleSwitches] 加载失败', e);
+                    }
+                },
+
+                async save(key, value) {
+                    try {
+                        await fetch('./api/save_config', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({[key]: value})
+                        });
+                    } catch (e) {
+                        console.error('[ToggleSwitches] 保存失败', e);
+                    }
+                },
+
+                init() {
+                    const bind = (id, key) => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.addEventListener('change', () => {
+                                this.save(key, el.checked ? 'on' : 'off');
+                            });
+                        }
+                    };
+                    bind('toggle-websearch', this.CONFIG_MAP.websearch);
+                    bind('toggle-ase', this.CONFIG_MAP.ase);
+                    bind('toggle-face', this.CONFIG_MAP.face);
+
+                    // 人脸开关变化时，更新感知开关状态
+                    const faceEl = document.getElementById('toggle-face');
+                    if (faceEl) {
+                        faceEl.addEventListener('change', () => {
+                            this._updateAseState();
+                        });
+                    }
+                }
+            };
+
+            const CardTemplates = {
+                render(agentId, data) {
+                    const template = this.templates[agentId] || this.templates.default;
+                    return template(data);
+                },
+
+                templates: {
+                    weather(data) {
+                        return `
+                            <div class="weather-card">
+                                <div class="weather-header">
+                                    <span class="weather-city">${escapeHtml(data.city || '')}</span>
+                                    <span class="weather-summary">${escapeHtml(data.summary || '')}</span>
+                                </div>
+                                <div class="weather-detail">${escapeHtml(data.detail || '')}</div>
+                            </div>
+                        `;
+                    },
+
+                    news(data) {
+                        const items = (data.items || []).map(item =>
+                            `<li class="news-item">${escapeHtml(item.title || '')}</li>`
+                        ).join('');
+                        return `<ul class="news-list">${items}</ul>`;
+                    },
+
+                    homeassistant(data) {
+                        return `
+                            <div class="device-status">
+                                <span class="device-name">${escapeHtml(data.name || '')}</span>
+                                <span class="device-state ${data.state || ''}">${data.state || ''}</span>
+                            </div>
+                        `;
+                    },
+
+                    default(data) {
+                        return Object.entries(data || {}).map(([k, v]) =>
+                            `<div><strong>${k}:</strong> ${escapeHtml(String(v))}</div>`
+                        ).join('');
+                    }
+                }
+            };
+
+            const AgentMessageRenderer = {
+                _getAgentMeta(message) {
+                    const agent = AgentStore.agents.find(a => a.id === message.agent_id);
+                    return {
+                        icon: agent ? agent.icon : (message.agent_icon || '🤖'),
+                        name: agent ? agent.name : (message.agent_name || '助手'),
+                    };
+                },
+
+                render(message, container) {
+                    const type = (message.agent_result && message.agent_result.type) || 'text';
+                    const renderer = this.renderers[type] || this.renderers.text;
+                    renderer.call(this, message, container);
+                },
+
+                renderers: {
+                    text(message, container) {
+                        const meta = this._getAgentMeta(message);
+                        const resultText = message.agent_result && message.agent_result.data && message.agent_result.data.text || '';
+                        const content = resultText || message.content || '';
+                        const html = `
+                            <div class="agent-message-header">
+                                <span class="agent-icon">${meta.icon}</span>
+                                <span class="agent-name">${meta.name}</span>
+                            </div>
+                            <div class="message-text">${escapeHtml(content)}</div>
+                        `;
+                        container.innerHTML = html;
+                    },
+
+                    card(message, container) {
+                        const data = message.agent_result && message.agent_result.data || {};
+                        const agentId = message.agent_id || '';
+                        const meta = this._getAgentMeta(message);
+                        const html = `
+                            <div class="agent-card">
+                                <div class="agent-message-header">
+                                    <span class="agent-icon">${meta.icon}</span>
+                                    <span class="agent-name">${meta.name}</span>
+                                </div>
+                                <div class="agent-card-body">
+                                    ${CardTemplates.render(agentId, data)}
+                                </div>
+                            </div>
+                        `;
+                        container.innerHTML = html;
+                    },
+
+                    list(message, container) {
+                        const data = message.agent_result && message.agent_result.data || {};
+                        const items = (data.items || []).map(item =>
+                            `<li class="news-item">${escapeHtml(item.title || '')}</li>`
+                        ).join('');
+                        const meta = this._getAgentMeta(message);
+                        container.innerHTML = `
+                            <div class="agent-message-header">
+                                <span class="agent-icon">${meta.icon}</span>
+                                <span class="agent-name">${meta.name}</span>
+                            </div>
+                            <div class="agent-card">
+                                <div class="agent-card-title">${escapeHtml(message.agent_result && message.agent_result.title || '')}</div>
+                                <ul class="news-list">${items}</ul>
+                            </div>
+                        `;
+                    },
+
+                    html(message, container) {
+                        const html = message.agent_result && message.agent_result.data && message.agent_result.data.html || '';
+                        container.innerHTML = html;
+                    },
+
+                    error(message, container) {
+                        const meta = this._getAgentMeta(message);
+                        container.innerHTML = `
+                            <div class="agent-message-header">
+                                <span class="agent-icon">${meta.icon}</span>
+                                <span class="agent-name">${meta.name}</span>
+                            </div>
+                            <div class="message-text" style="color:#ff8888">${escapeHtml(message.agent_result && message.agent_result.error || '执行失败')}</div>
+                        `;
+                    }
+                }
+            };
+
+            const SlashCommandPicker = {
+                el: null,
+                items: [],
+                selectedIndex: -1,
+
+                init() {
+                    const input = document.getElementById('chat_input');
+                    if (!input) return;
+                    this.el = document.createElement('div');
+                    this.el.className = 'slash-picker';
+                    input.parentNode.style.position = 'relative';
+                    input.parentNode.appendChild(this.el);
+
+                    input.addEventListener('input', (e) => this._onInput(e));
+                    input.addEventListener('keydown', (e) => this._onKeydown(e));
+                    document.addEventListener('click', (e) => {
+                        if (!this.el.contains(e.target) && e.target !== input) {
+                            this.hide();
+                        }
+                    });
+                },
+
+                _onInput(e) {
+                    const text = e.target.value;
+                    if (!text.startsWith('/')) {
+                        this.hide();
+                        return;
+                    }
+                    const query = text.slice(1).toLowerCase();
+                    const agents = AgentStore.getSlashAgents();
+                    this.items = agents.filter(a => {
+                        if (!a.slash_commands) return false;
+                        return a.slash_commands.some(cmd => cmd.toLowerCase().includes(query));
+                    });
+                    this.selectedIndex = this.items.length > 0 ? 0 : -1;
+                    this._render();
+                },
+
+                _onKeydown(e) {
+                    if (!this.el.classList.contains('active')) return;
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        this.selectedIndex = (this.selectedIndex + 1) % this.items.length;
+                        this._render();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        this.selectedIndex = (this.selectedIndex - 1 + this.items.length) % this.items.length;
+                        this._render();
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (this.selectedIndex >= 0 && this.items[this.selectedIndex]) {
+                            this._select(this.items[this.selectedIndex]);
+                        }
+                    } else if (e.key === 'Escape') {
+                        this.hide();
+                    }
+                },
+
+                _render() {
+                    if (this.items.length === 0) {
+                        this.hide();
+                        return;
+                    }
+                    this.el.innerHTML = this.items.map((item, i) => `
+                        <div class="slash-picker-item ${i === this.selectedIndex ? 'selected' : ''}" data-index="${i}">
+                            <span class="cmd-icon">${item.icon || '🤖'}</span>
+                            <span class="cmd-name">${item.slash_commands ? item.slash_commands[0] : ''}</span>
+                            <span class="cmd-desc">${item.name || ''}</span>
+                        </div>
+                    `).join('');
+                    this.el.querySelectorAll('.slash-picker-item').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const idx = parseInt(el.dataset.index);
+                            this._select(this.items[idx]);
+                        });
+                    });
+                    this.el.classList.add('active');
+                },
+
+                _select(agent) {
+                    const input = document.getElementById('chat_input');
+                    const cmd = agent.slash_commands && agent.slash_commands[0] || '';
+                    input.value = cmd + ' ';
+                    input.focus();
+                    this.hide();
+                },
+
+                hide() {
+                    this.el.classList.remove('active');
+                    this.items = [];
+                    this.selectedIndex = -1;
+                }
+            };
+
+            const AgentParamDialog = {
+                overlay: null,
+                currentAgent: null,
+
+                init() {
+                    this.overlay = document.createElement('div');
+                    this.overlay.className = 'agent-param-overlay';
+                    this.overlay.innerHTML = `
+                        <div class="agent-param-dialog">
+                            <h4 id="agent-dialog-title">参数</h4>
+                            <div id="agent-dialog-body"></div>
+                            <div class="dialog-actions">
+                                <button class="btn-cancel" id="agent-dialog-cancel">取消</button>
+                                <button class="btn-confirm" id="agent-dialog-confirm">确认</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(this.overlay);
+                    this.overlay.querySelector('.btn-cancel').addEventListener('click', () => this.hide());
+                    this.overlay.querySelector('.btn-confirm').addEventListener('click', () => this._confirm());
+                    this.overlay.addEventListener('click', (e) => {
+                        if (e.target === this.overlay) this.hide();
+                    });
+                },
+
+                show(agent, onConfirm) {
+                    this.currentAgent = agent;
+                    this.onConfirm = onConfirm;
+                    const titleEl = document.getElementById('agent-dialog-title');
+                    const bodyEl = document.getElementById('agent-dialog-body');
+                    titleEl.textContent = `${agent.icon || ''} ${agent.name || ''}`;
+                    const params = agent.params || [];
+                    bodyEl.innerHTML = params.map(p => `
+                        <label style="color:#a0d0ff;font-size:12px;display:block;margin-bottom:4px">${p.label || p.name}</label>
+                        <input type="text" id="agent-param-${p.name}" placeholder="${p.placeholder || ''}" value="${p.default || ''}">
+                    `).join('');
+                    this.overlay.classList.add('active');
+                },
+
+                hide() {
+                    this.overlay.classList.remove('active');
+                    this.currentAgent = null;
+                },
+
+                _confirm() {
+                    if (!this.currentAgent) return;
+                    const params = {};
+                    (this.currentAgent.params || []).forEach(p => {
+                        const el = document.getElementById(`agent-param-${p.name}`);
+                        if (el) params[p.name] = el.value;
+                    });
+                    this.hide();
+                    if (this.onConfirm) this.onConfirm(params);
+                }
+            };
+
+            const AgentToolbar = {
+                init() {
+                    const container = document.querySelector('.chat-input-container');
+                    if (!container) return;
+                    container.style.flexDirection = 'column';
+                    container.style.alignItems = 'stretch';
+
+                    const toolbarDiv = document.createElement('div');
+                    toolbarDiv.className = 'toolbar-container';
+                    toolbarDiv.id = 'agent-toolbar';
+                    container.insertBefore(toolbarDiv, container.firstChild);
+
+                    this.render();
+                },
+
+                render() {
+                    const toolbar = document.getElementById('agent-toolbar');
+                    if (!toolbar) return;
+                    const agents = AgentStore.getToolbarAgents();
+
+                    // 上排：新对话、日常、模型、家居 + Agent按钮（天气、新闻、绘画）
+                    const primaryRow = document.createElement('div');
+                    primaryRow.className = 'toolbar-row toolbar-row-primary';
+                    let primaryHtml = '';
+                    primaryHtml += `<button class="btn-large" data-action="new-session"><span class="icon">+</span><span class="btn-label">新对话</span></button>`;
+                    const presetLabels = { balanced: '日常', analysis: '深度', creative: '创意' };
+                    const currentPreset = localStorage.getItem('llm_preset') || 'balanced';
+                    primaryHtml += `<button class="btn-large" data-action="persona"><span class="icon">💬</span><span class="btn-label">${presetLabels[currentPreset] || '日常'}</span></button>`;
+                    primaryHtml += `<button class="btn-large" data-action="model-switch"><span class="icon">⚙️</span><span class="btn-label">模型</span></button>`;
+                    primaryHtml += `<button class="btn-large" data-action="home-panel"><span class="icon">🏠</span><span class="btn-label">家居</span></button>`;
+                    agents.forEach(a => {
+                        primaryHtml += `<button class="btn-large" data-agent-id="${a.id}" title="${a.description || a.name}"><span class="icon">${a.icon || '🤖'}</span><span class="btn-label">${a.name || ''}</span></button>`;
+                    });
+                    primaryHtml += `<button class="btn-large" data-action="draw"><span class="icon">🖌️</span><span class="btn-label">绘画</span></button>`;
+                    primaryRow.innerHTML = primaryHtml;
+
+                    // 下排：ToggleSwitches + 控制按钮
+                    const secondaryRow = document.createElement('div');
+                    secondaryRow.className = 'toolbar-row toolbar-row-secondary';
+                    // 移动 input-switches 到 secondaryRow 中
+                    const inputSwitches = document.querySelector('.input-switches');
+                    if (inputSwitches) {
+                        secondaryRow.appendChild(inputSwitches);
+                    }
+                    // 右侧控制按钮
+                    const controlsDiv = document.createElement('div');
+                    controlsDiv.style.display = 'flex';
+                    controlsDiv.style.gap = '8px';
+                    controlsDiv.style.alignItems = 'center';
+                    // 自动朗读开关
+                    const savedAutoVoice = localStorage.getItem('autoVoice');
+                    const autoVoiceChecked = savedAutoVoice === null ? true : savedAutoVoice === 'true';
+                    controlsDiv.innerHTML += `<span id="tts-status" class="tts-status"></span><label class="agent-toggle" title="自动朗读"><input type="checkbox" id="autoVoice" ${autoVoiceChecked ? 'checked' : ''}><span>🔊</span></label>`;
+                    // 搜索按钮
+                    controlsDiv.innerHTML += `<button class="btn-icon" id="search-btn" title="搜索 (Ctrl+F)">🔍</button>`;
+                    // 语音和附件
+                    controlsDiv.innerHTML += `<button class="btn-icon" data-action="attach" title="附件">📎</button>`;
+                    controlsDiv.innerHTML += `<button class="btn-icon" data-action="voice" title="语音输入">🎤</button>`;
+                    secondaryRow.appendChild(controlsDiv);
+
+                    toolbar.innerHTML = '';
+                    toolbar.appendChild(primaryRow);
+                    toolbar.appendChild(secondaryRow);
+
+                    // 绑定事件
+                    toolbar.querySelectorAll('[data-action]').forEach(btn => {
+                        btn.addEventListener('click', (e) => this._onActionClick(e, btn.dataset.action));
+                    });
+                    toolbar.querySelectorAll('[data-agent-id]').forEach(btn => {
+                        btn.addEventListener('click', (e) => this._onAgentClick(e, btn.dataset.agentId));
+                    });
+                    // 绑定搜索按钮
+                    const searchBtn = toolbar.querySelector('#search-btn');
+                    if (searchBtn) {
+                        searchBtn.addEventListener('click', () => ChatSearch.open());
+                    }
+                    // 绑定 hold 模式的按住事件到 toolbar voice 按钮
+                    bindHoldEvents();
+                },
+
+                _onActionClick(e, action) {
+                    e.stopPropagation();
+                    if (action === 'new-session') {
+                        AppState.createNewSession();
+                    } else if (action === 'home-panel') {
+                        HAPanel.open();
+                    } else if (action === 'voice') {
+                        // hold 模式由 mousedown/mouseup 事件控制（bindHoldEvents 绑定），click 不处理
+                        if (asrMode !== 'hold') {
+                            _toggleMic();
+                        }
+                    } else if (action === 'attach') {
+                        let menu = document.getElementById('upload-menu');
+                        if (!menu) {
+                            menu = document.createElement('div');
+                            menu.id = 'upload-menu';
+                            menu.style.cssText = 'display:none;position:fixed;background:#1e1e1e;border:1px solid #444;border-radius:6px;padding:4px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+                            menu.innerHTML = '<div style="padding:8px 12px;cursor:pointer;color:#ddd;border-radius:4px;white-space:nowrap;" onmouseenter="this.style.background=\'#333\'" onmouseleave="this.style.background=\'transparent\'" onclick="document.getElementById(\'image-upload-input\').click();document.getElementById(\'upload-menu\').style.display=\'none\';">🖼️ 上传图片</div>' +
+                                '<div style="padding:8px 12px;cursor:pointer;color:#ddd;border-radius:4px;white-space:nowrap;" onmouseenter="this.style.background=\'#333\'" onmouseleave="this.style.background=\'transparent\'" onclick="document.getElementById(\'file-upload-input\').click();document.getElementById(\'upload-menu\').style.display=\'none\';">📎 上传文件</div>' +
+                                '<div style="padding:8px 12px;cursor:pointer;color:#ddd;border-radius:4px;white-space:nowrap;" onmouseenter="this.style.background=\'#333\'" onmouseleave="this.style.background=\'transparent\'" onclick="toggleCamera();document.getElementById(\'upload-menu\').style.display=\'none\';">🎥 拍照</div>';
+                            document.body.appendChild(menu);
+                        }
+                        const btn = e.target.closest('button');
+                        const rect = btn ? btn.getBoundingClientRect() : null;
+                        if (rect) {
+                            menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+                            menu.style.right = (window.innerWidth - rect.right) + 'px';
+                        }
+                        const isHidden = menu.style.display === 'none';
+                        menu.style.display = isHidden ? 'block' : 'none';
+                    } else if (action === 'model-switch') {
+                        showModelSwitcher();
+                    } else if (action === 'persona') {
+                        showPersonaSwitcher();
+                    } else if (action === 'draw') {
+                        const input = document.getElementById('chat_input');
+                        if (input) {
+                            input.value = '/draw 请帮我画一幅';
+                            input.focus();
+                            input.setSelectionRange(input.value.length, input.value.length);
+                            input.dispatchEvent(new Event('input'));
+                        }
+                    } else {
+                        console.log('[AgentToolbar] action:', action);
+                    }
+                },
+
+                async _onAgentClick(e, agentId) {
+                    e.stopPropagation();
+                    const agent = AgentStore.agents.find(a => a.id === agentId);
+                    if (!agent) return;
+                    const params = agent.params || [];
+                    if (params.length > 0) {
+                        AgentParamDialog.show(agent, async (p) => {
+                            await this._executeAgent(agent, p);
+                        });
+                    } else {
+                        await this._executeAgent(agent, {});
+                    }
+                },
+
+                async _executeAgent(agent, params) {
+                    const sessionId = AppState.currentSessionId;
+                    const res = await AgentStore.execute(agent.id, params, sessionId);
+                    if (res.status === 'success' && res.result) {
+                        const msg = {
+                            role: 'assistant',
+                            content: res.result.title || 'Agent 执行结果',
+                            agent_id: agent.id,
+                            agent_name: agent.name,
+                            agent_icon: agent.icon,
+                            agent_result: res.result,
+                        };
+                        appendMessage(msg);
+                        AppState.conversationHistory.push(msg);
+
+                        // Agent 结果也触发 TTS 自动朗读
+                        if (getAutoVoiceState() && window.userInteracted) {
+                            let ttsText = res.result.title || '';
+                            const rdata = res.result.data || {};
+                            if (res.result.type === 'card' && rdata.detail) {
+                                ttsText = rdata.detail;
+                            } else if (res.result.type === 'list' && rdata.items) {
+                                ttsText = rdata.items.map(function(it) { return it.title; }).join('，');
+                            } else if (res.result.type === 'text' && rdata.text) {
+                                ttsText = rdata.text;
+                            }
+                            if (ttsText) {
+                                fetch('./api/tts_segment', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({text: ttsText, session_id: sessionId})
+                                })
+                                .then(function(r) { return r.json(); })
+                                .then(function(ttsData) {
+                                    if (ttsData.status === 'success' && ttsData.audio_urls && ttsData.audio_urls.length > 0) {
+                                        playTtsQueue(ttsData.audio_urls, null);
+                                        if (ttsData.batch_id && ttsData.total > 1) {
+                                            startTtsPoll(ttsData.batch_id, ttsData.total);
+                                        }
+                                    }
+                                })
+                                .catch(function(err) {
+                                    console.error('Agent TTS 请求失败:', err);
+                                });
+                            }
+                        }
+                    } else {
+                        showStatusToast(res.message || 'Agent 执行失败');
+                    }
+                }
+            };
+
+            const HAPanel = {
+                overlay: null,
+                panel: null,
+                deviceList: null,
+
+                init() {
+                    this.overlay = document.createElement('div');
+                    this.overlay.className = 'panel-overlay';
+                    this.overlay.id = 'ha-panel-overlay';
+                    this.overlay.addEventListener('click', () => this.close());
+
+                    this.panel = document.createElement('div');
+                    this.panel.className = 'side-panel';
+                    this.panel.id = 'ha-panel';
+                    this.panel.innerHTML = `
+                        <div class="panel-header">
+                            <h3>🏠 智能家居控制</h3>
+                            <button class="panel-refresh" title="刷新设备">🔄</button>
+                            <button class="panel-close">×</button>
+                        </div>
+                        <div class="panel-body" id="ha-device-list">
+                            <div style="color:#78909c;text-align:center;padding:20px">加载中...</div>
+                        </div>
+                    `;
+                    this.panel.querySelector('.panel-close').addEventListener('click', () => this.close());
+                    this.panel.querySelector('.panel-refresh').addEventListener('click', () => this.loadDevices());
+
+                    document.body.appendChild(this.overlay);
+                    document.body.appendChild(this.panel);
+                    this.deviceList = document.getElementById('ha-device-list');
+                },
+
+                open() {
+                    this.overlay.classList.add('active');
+                    this.panel.classList.add('active');
+                    this.loadDevices();
+                },
+
+                close() {
+                    this.overlay.classList.remove('active');
+                    this.panel.classList.remove('active');
+                },
+
+                async loadDevices() {
+                    if (!this.deviceList) return;
+                    this.deviceList.innerHTML = '<div style="color:#78909c;text-align:center;padding:20px">加载中...</div>';
+                    try {
+                        const res = await fetch('./api/ha_devices');
+                        const data = await res.json();
+                        if (data.status === 'success') {
+                            this.renderDevices(data.devices || []);
+                        } else {
+                            this.deviceList.innerHTML = `<div style="color:#ff8888;text-align:center;padding:20px">${data.message || '加载失败'}</div>`;
+                        }
+                    } catch (e) {
+                        this.deviceList.innerHTML = `<div style="color:#ff8888;text-align:center;padding:20px">网络错误</div>`;
+                    }
+                },
+
+                renderDevices(devices) {
+                    if (!this.deviceList) return;
+                    if (devices.length === 0) {
+                        this.deviceList.innerHTML = '<div style="color:#78909c;text-align:center;padding:20px">暂无设备</div>';
+                        return;
+                    }
+                    this.deviceList.innerHTML = devices.map(d => {
+                        const isOn = d.state === 'on' || d.state === 'open';
+                        const action = isOn ? 'turn_off' : 'turn_on';
+                        const label = isOn ? '关闭' : '开启';
+                        return `
+                            <div class="device-card">
+                                <div>
+                                    <div class="device-name">${escapeHtml(d.name || d.entity_id)}</div>
+                                    <div class="device-state ${d.state}">${d.state}</div>
+                                </div>
+                                <button class="device-toggle" data-entity="${d.entity_id}" data-action="${action}">${label}</button>
+                            </div>
+                        `;
+                    }).join('');
+                    this.deviceList.querySelectorAll('.device-toggle').forEach(btn => {
+                        btn.addEventListener('click', async (e) => {
+                            const entityId = btn.dataset.entity;
+                            const action = btn.dataset.action;
+                            try {
+                                const res = await fetch('./api/ha_control', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({entity_id: entityId, action: action})
+                                });
+                                const data = await res.json();
+                                if (data.status === 'success') {
+                                    this.loadDevices();
+                                } else {
+                                    showStatusToast(data.message || '操作失败');
+                                }
+                            } catch (err) {
+                                showStatusToast('网络错误');
+                            }
+                        });
+                    });
+                }
+            };
+
+            // 初始化 Agent 模块
+            AgentStore.init().then((success) => {
+                if (AgentStore.agents.length > 0) {
+                    AgentToolbar.init();
+                }
+            }).catch((e) => {
+                console.error('[AgentStore] 初始化失败，Toolbar 不渲染', e);
+            });
+            ToggleSwitches.init();
+            ToggleSwitches.load();
+            SlashCommandPicker.init();
+            AgentParamDialog.init();
+            HAPanel.init();
 
             ChatNav.init();
             ChatSearch.init();

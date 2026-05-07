@@ -1,11 +1,12 @@
 # Created by Charles on 2018/10/10, Modified by MewCo-AI on 2026/03/14
+import time
 import requests as rq
 from bs4 import BeautifulSoup
 
 ABSTRACT_MAX_LENGTH = 300
 HEADERS = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
            "Content-Type": "application/x-www-form-urlencoded",
-           "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36',
+           "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
            "Referer": "https://www.baidu.com/",
            "Accept-Encoding": "gzip, deflate",
            "Accept-Language": "zh-CN,zh;q=0.9"}
@@ -28,13 +29,18 @@ def search(keyword, num_results=10):  # 搜索
         if not next_url:
             break
         page += 1
+        if page > 1:
+            time.sleep(1)  # 分页请求间隔，降低反爬风险
     return list_result[: num_results] if len(list_result) > num_results else list_result
 
 
 def parse_html(url, rank_start=0):  # 解析html
     try:
-        res = session.get(url=url)
+        res = session.get(url=url, timeout=10)
         res.encoding = "utf-8"
+        # 反爬检测：如果返回页面不包含搜索结果容器，可能是验证码页
+        if "content_left" not in res.text and "security_verify" in res.text:
+            return None, None
         root = BeautifulSoup(res.text, "lxml")
         list_data = []
         div_contents = root.find("div", id="content_left")

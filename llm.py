@@ -290,8 +290,6 @@ def chat_llm(msg):  # 与大语言模型对话（路径 1：本地语音模式�
 def chat_preprocess(msg, image_base64=None, prev_image_base64=None, file_content=None, file_name=None):  # 对话预处理
     stop_tts()
     try:
-        if "几点" in msg or "多少点" in msg or "时间" in msg or "时候" in msg or "日期" in msg or "多少号" in msg or "几号" in msg:
-            msg = f"[当前时间:{current_time()}]{msg}"
         if "哈喽" in msg:
             current_username = get_config_value("username", username)
             current_mate_name = get_config_value("mate_name", mate_name)
@@ -346,10 +344,6 @@ def chat_preprocess(msg, image_base64=None, prev_image_base64=None, file_content
             res = recognize_face()
             if "未检测到摄像头" in res or "摄像头画面读取失败" in res or "摄像头访问异常" in res:
                 res = "我还不知道你的名字呢，可以告诉我怎么称呼你吗？"
-        elif "切换" in msg and "语音" in msg:
-            res = switch_asr_mode()
-        elif "切换" in msg and "主动" in msg:
-            res = switch_ase_mode()
         elif "设置" in msg or "配置" in msg or "模式" in msg:
             with open("data/db/current_asr.txt", "r", encoding="utf-8") as f:
                 current_asr = f.read()
@@ -361,15 +355,6 @@ def chat_preprocess(msg, image_base64=None, prev_image_base64=None, file_content
             res = f"语音识别模式为{current_asr}，对话语言模型为{current_prefer_llm}，语音合成引擎为{current_prefer_tts}，图像识别引擎为{current_prefer_vlm}，主动感知对话为{current_ase}"
         elif "确认删除记忆" in msg or "确定删除记忆" in msg:
             res = clear_chat()
-        elif "确定退出" in msg or "确认退出" in msg:
-            exit_app()
-            return None
-        elif "确认重新启动" in msg or "确定重新启动" in msg:
-            reboot()
-            return None
-        elif "确认关机" in msg or "确定关机" in msg:
-            shutdown()
-            return None
         else:
             # 在所有关键词判断完成后，如果有文件内容，再附加到消息中传给 LLM
             if file_content and file_name:

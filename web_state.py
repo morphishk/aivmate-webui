@@ -5,6 +5,7 @@ import subprocess
 import psutil
 import time
 import base64
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from llm import (
     chat_preprocess, chat_with_history,
 )
@@ -16,8 +17,15 @@ from web_settings import (
     glm_key, glm_llm_model, openai_url, openai_key, openai_llm_model,
     ollama_url, ollama_llm_model, lmstudio_url,
     dify_key, anything_llm_ip, anything_llm_ws, anything_llm_key,
-    rkllm_url, save_config, load_config
+    rkllm_url, save_config, load_config,
+    ha_api, ha_key
 )
+from agents.agent_registry import AgentRegistry
+from agents.agent_base import AgentContext
+from agents.auto_agent_router import AutoAgentRouter
+from homeassistant_api import Client as hClient
+
+AgentRegistry.discover_and_register()
 from function import get_wan_info, get_lan_info, get_wifi_info
 from conversation import (
     create_session, get_session, list_sessions, save_message, get_session_messages,
@@ -45,18 +53,11 @@ state_web_html = """
 </head>
 <body>
     <div id="app-container">
-        <!-- 顶部状态栏 (40px, hover展开显示详细信息) -->
+        <!-- 顶部导航栏 -->
         <div id="status-bar">
             <div class="status-bar-collapsed">
                 <span class="status-logo"><img src="assets/image/logo.png" alt="Logo"> Aivmate LX3</span>
-                <span class="status-metrics">
-                    <span id="cpu_badge">CPU: <span id="cpu_percent">-</span></span>
-                    <span id="mem_badge">MEM: <span id="memory_percent">-</span></span>
-                    <span id="temp_badge">TEMP: <span id="temp">-</span></span>
-                    <span id="wan_badge">WAN: <span id="wan_info">-</span></span>
-                    <span id="lan_badge">LAN: <span id="lan_info">-</span></span>
-                    <span id="wifi_badge">WIFI: <span id="wifi_info">-</span></span>
-                </span>
+                <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="展开侧边栏">☰</button>
                 <span class="status-menu">
                     <button id="dropdown-btn">📜</button>
                     <div id="dropdown-content" class="dropdown-content">
@@ -67,34 +68,6 @@ state_web_html = """
                         <button id="settings-btn">⚙️系统设置</button>
                     </div>
                 </span>
-            </div>
-            <div class="status-bar-expanded">
-                <div class="expanded-metrics-row">
-                    <div class="metric-box">
-                        <div class="metric-label">💻CPU使用率</div>
-                        <div class="metric-value" id="cpu_percent_exp">0%</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">💾内存使用率</div>
-                        <div class="metric-value" id="memory_percent_exp">0%</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">🌡️内部温度</div>
-                        <div class="metric-value" id="temp_exp">0℃</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">🌍外部网络</div>
-                        <div class="metric-value" id="wan_info_exp">-</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">🏠内部网络</div>
-                        <div class="metric-value" id="lan_info_exp">-</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label">📶WiFi</div>
-                        <div class="metric-value" id="wifi_info_exp">-</div>
-                    </div>
-                </div>
             </div>
         </div>
         <!-- 主内容区: 侧边栏 + 聊天区 + 角色面板 -->
@@ -122,16 +95,7 @@ state_web_html = """
             <div id="chat-area">
                 <div id="chat-main-wrapper">
                     <div class="chat-container">
-                        <div class="voice-bar">
-                            <button id="sidebar-expand-btn" class="sidebar-expand-btn" title="展开侧边栏">☰</button>
-                            <span id="tts-status" class="tts-status"></span>
-                            <label class="voice-toggle" title="自动朗读">
-                                <input type="checkbox" id="autoVoice">
-                                <span class="switch"></span>
-                                <span>🔊</span>
-                            </label>
-                            <button id="search-btn" class="search-btn" title="搜索 (Ctrl+F)">🔍</button>
-                        </div>
+                        <!-- 顶部控制栏已移除，功能按钮移至底部输入区域 -->
                         <div id="voice-hint">💡 首次使用请点击页面任意位置，以启用语音自动播放</div>
                         <!-- 搜索浮层（P2 Day 4 新增） -->
                         <div id="search-float" style="display:none;">
@@ -171,25 +135,23 @@ state_web_html = """
                             </div>
                         </div>
                         <div class="chat-input-container">
-                            <button id="clear_button" class="clear-button">➕新对话</button>
-                            <select id="preset-select" class="preset-select" title="切换对话风格">
-                                <option value="balanced">💬 日常</option>
-                                <option value="analysis">🔍 深度</option>
-                                <option value="creative">✨ 创意</option>
-                            </select>
-                            <button id="btn-switch-model" class="clear-button" onclick="showModelSwitcher()" title="切换模型">⚙️ 模型</button>
-                            <div class="upload-menu-wrapper">
-                                <button class="upload-btn" onclick="toggleUploadMenu(event)" title="附件">📎</button>
-                                <div id="upload-menu" class="upload-menu" style="display:none;">
-                                    <div class="upload-menu-item" onclick="document.getElementById('image-upload-input').click();toggleUploadMenu(event);">🖼️ 上传图片</div>
-                                    <div class="upload-menu-item" onclick="document.getElementById('file-upload-input').click();toggleUploadMenu(event);">📎 上传文件</div>
-                                    <div class="upload-menu-item" onclick="toggleCamera();toggleUploadMenu(event);">🎥 拍照</div>
-                                </div>
-                            </div>
-                            <button id="mic-btn" class="clear-button" onclick="toggleMic()" title="语音输入">🎤</button>
                             <input type="file" id="image-upload-input" accept="image/*" style="display:none;" onchange="handleImageUpload(this)">
                             <input type="file" id="file-upload-input" accept=".txt,.md,.pdf,.docx" style="display:none;" onchange="handleFileUpload(this)">
-                            <input type="text" id="chat_input" placeholder="请输入消息..." class="chat-input">
+                            <div class="input-switches">
+                                <label class="agent-toggle" title="开启后AI会自动联网搜索">
+                                    <input type="checkbox" id="toggle-websearch">
+                                    <span>🌐 联网</span>
+                                </label>
+                                <label class="agent-toggle" title="开启后AI会主动发起对话">
+                                    <input type="checkbox" id="toggle-ase">
+                                    <span>🧠 感知</span>
+                                </label>
+                                <label class="agent-toggle" title="开启后摄像头会自动识别人脸">
+                                    <input type="checkbox" id="toggle-face">
+                                    <span>👤 人脸</span>
+                                </label>
+                            </div>
+                            <textarea id="chat_input" placeholder="请输入消息..." class="chat-input" rows="1"></textarea>
                             <button id="send_button" class="send-button">发送</button>
                         </div>
                     </div>
@@ -241,7 +203,7 @@ state_web_html = """
             </div>
         </div>
     </div>
-    <script src="/assets/js/state-web.js?v=4"></script>
+    <script src="/assets/js/state-web.js?v=5"></script>
 </body>
 </html>"""
 
@@ -412,6 +374,13 @@ def handle_chat():
                 # 会话不存在，自动新建（不报错）
                 session_id = create_session()
 
+        # 记录当前活跃 Web 会话（供 ASE 写入）
+        try:
+            with open("data/db/current_web_session.txt", "w", encoding="utf-8") as f:
+                f.write(session_id)
+        except Exception:
+            pass
+
         # 2. 加载该会话历史消息
         session_messages = get_session_messages(session_id, limit=20)
 
@@ -444,6 +413,40 @@ def handle_chat():
                 "role": m["role"],
                 "content": m["content"],
             })
+
+        # === 新增：自动 Agent 路由（持久化开关）===
+        if not image_base64 and not file_content:
+            auto_result = AutoAgentRouter.route(final_message, get_config())
+            if auto_result:
+                agent_id_auto, agent_params_auto = auto_result
+                agent_class_auto = AgentRegistry.get(agent_id_auto)
+                if agent_class_auto:
+                    context_auto = AgentContext(session_id, get_config(), history_for_llm)
+                    agent_exec_result = agent_class_auto.execute(agent_params_auto, context_auto)
+                    if agent_exec_result.type != "error":
+                        # 将 Agent 结果注入 system prompt
+                        injection_text = ""
+                        if agent_exec_result.type == "text":
+                            injection_text = agent_exec_result.data.get("text", "")
+                        elif agent_exec_result.type == "card":
+                            injection_text = agent_exec_result.data.get("detail", "")
+                        elif agent_exec_result.type == "list":
+                            items = agent_exec_result.data.get("items", [])
+                            injection_text = "\n".join([item.get("title", "") for item in items])
+                        if injection_text:
+                            search_injection = f"[{agent_exec_result.title}] {injection_text}"
+                            system_msg = next((m for m in history_for_llm if m.get("role") == "system"), None)
+                            if system_msg:
+                                system_msg["content"] += f"\n\n{search_injection}"
+                            else:
+                                history_for_llm.insert(0, {"role": "system", "content": search_injection})
+                        # 保存 Agent 结果到会话
+                        save_message(
+                            session_id, "assistant",
+                            content=agent_exec_result.title or "Agent 执行结果",
+                            agent_id=agent_id_auto,
+                            agent_result=agent_exec_result.to_dict(),
+                        )
 
         # 8. 调用路径 2：chat_with_history（不读写全局 openai_history）
         # 注意：VLM 图片分析仍走 chat_preprocess（P0 兼容）
@@ -1171,6 +1174,21 @@ def api_get_config():
         return jsonify({'status': 'error', 'message': str(e)})
 
 
+@app.route('/api/save_config', methods=['POST'])
+def api_save_config():
+    """保存配置项（供 ToggleSwitches 等前端组件持久化）"""
+    try:
+        data = request.get_json() or {}
+        cfg = load_config()
+        cfg.update(data)
+        if save_config(cfg):
+            return jsonify({'status': 'success'})
+        return jsonify({'status': 'error', 'message': '保存配置失败'})
+    except Exception as e:
+        logging.getLogger("web_state").error("api_save_config 异常", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)})
+
+
 @app.route('/api/parse_file', methods=['POST'])
 def api_parse_file():
     """接收前端上传的文件，解析为文本后返回"""
@@ -1415,6 +1433,125 @@ def api_search():
     except Exception as e:
         logging.getLogger("web_state").error("api_search 异常", exc_info=True)
         return jsonify({'status': 'error', 'message': '搜索失败，请重试'})
+
+
+@app.route('/api/agents', methods=['GET'])
+def list_agents():
+    """返回所有可用 Agent 的元数据列表"""
+    return jsonify({
+        "status": "success",
+        "agents": AgentRegistry.list_all()
+    })
+
+
+@app.route('/api/agent/<agent_id>', methods=['POST'])
+def execute_agent(agent_id):
+    """执行指定 Agent"""
+    agent_class = AgentRegistry.get(agent_id)
+    if not agent_class:
+        return jsonify({"status": "error", "message": f"Agent '{agent_id}' 不存在"}), 404
+
+    data = request.json or {}
+    params = data.get("params", {})
+    session_id = data.get("session_id")
+
+    # 参数校验
+    valid, err_msg = agent_class.validate_params(params)
+    if not valid:
+        return jsonify({"status": "error", "message": err_msg}), 400
+
+    # 构建上下文
+    user_config = get_config()
+    history = get_session_messages(session_id, limit=10) if session_id else []
+    context = AgentContext(session_id, user_config, history)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(agent_class.execute, params, context)
+            result = future.result(timeout=10)
+
+        # 将 Agent 结果作为 assistant 消息保存到会话
+        if session_id and result.type != "error":
+            save_message(
+                session_id,
+                "assistant",
+                content=result.title or "Agent 执行结果",
+                agent_id=agent_id,
+                agent_result=result.to_dict(),
+            )
+
+        return jsonify({
+            "status": "success",
+            "result": {
+                "type": result.type,
+                "title": result.title,
+                "data": result.data,
+                "error": result.error,
+            }
+        })
+    except FutureTimeoutError:
+        logging.getLogger("agent").warning(f"Agent {agent_id} 执行超时（10s）")
+        return jsonify({
+            "status": "error",
+            "message": "Agent 执行超时，请稍后重试"
+        }), 504
+    except Exception as e:
+        logging.getLogger("agent").error(f"Agent {agent_id} 执行失败", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Agent 执行失败: {str(e)}"
+        }), 500
+
+
+@app.route('/api/ha_devices', methods=['GET'])
+def list_ha_devices():
+    """拉取 Home Assistant 设备列表"""
+    try:
+        client = hClient(f"{ha_api}/api/", ha_key)
+        states = client.get_states()
+        devices = []
+        for state in states:
+            domain = state.entity_id.split('.')[0]
+            if domain in ['light', 'switch', 'button', 'fan', 'climate']:
+                devices.append({
+                    "entity_id": state.entity_id,
+                    "name": state.attributes.get('friendly_name', state.entity_id),
+                    "domain": domain,
+                    "state": state.state,
+                    "icon": state.attributes.get('icon', ''),
+                })
+        return jsonify({"status": "success", "devices": devices})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/api/ha_control', methods=['POST'])
+def control_ha_device():
+    """控制指定 Home Assistant 设备"""
+    data = request.json or {}
+    entity_id = data.get('entity_id')
+    action = data.get('action')  # "turn_on", "turn_off", "press"
+
+    if not entity_id or not action:
+        return jsonify({"status": "error", "message": "缺少 entity_id 或 action"}), 400
+
+    try:
+        client = hClient(f"{ha_api}/api/", ha_key)
+        domain = entity_id.split('.')[0]
+        service_domain = client.get_domain(domain)
+
+        if action == "turn_on":
+            service_domain.turn_on(entity_id=entity_id)
+        elif action == "turn_off":
+            service_domain.turn_off(entity_id=entity_id)
+        elif action == "press":
+            service_domain.press(entity_id=entity_id)
+        else:
+            return jsonify({"status": "error", "message": f"不支持的操作: {action}"}), 400
+
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 
 def run_state_web():  # 启动主机状态监测服务

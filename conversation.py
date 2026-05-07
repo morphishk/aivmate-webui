@@ -113,10 +113,24 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     Args:
         conn: 已建立的数据库连接（由 _init_db 传入，避免递归）
     """
-    try:
-        conn.execute("ALTER TABLE messages ADD COLUMN file_content TEXT;")
-    except sqlite3.OperationalError:
-        pass  # 列已存在，忽略
+    cursor = conn.execute("PRAGMA table_info(messages)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    if 'file_content' not in columns:
+        try:
+            conn.execute("ALTER TABLE messages ADD COLUMN file_content TEXT;")
+        except sqlite3.OperationalError:
+            pass
+    if 'agent_id' not in columns:
+        try:
+            conn.execute("ALTER TABLE messages ADD COLUMN agent_id TEXT;")
+        except sqlite3.OperationalError:
+            pass
+    if 'agent_result' not in columns:
+        try:
+            conn.execute("ALTER TABLE messages ADD COLUMN agent_result TEXT;")
+        except sqlite3.OperationalError:
+            pass
 
 
 _db_initialized = False
@@ -513,6 +527,8 @@ def save_message(
     file_name: str | None = None,
     file_path: str | None = None,
     file_content: str | None = None,
+    agent_id: str | None = None,
+    agent_result: dict | None = None,
 ) -> int:
     """保存单条消息，返回消息 ID
 
@@ -524,18 +540,21 @@ def save_message(
         file_name: 上传的文件名
         file_path: 文件相对路径
         file_content: 文件文本内容
+        agent_id: 触发消息的 Agent ID
+        agent_result: Agent 结构化结果 JSON
 
     Returns:
         int: 新插入消息的 ID
     """
+    import json
     with _db_lock:
         conn = _get_db()
         try:
             conn.execute("BEGIN IMMEDIATE")
             cur = conn.execute(
-                "INSERT INTO messages (session_id, role, content, image_path, file_name, file_path, file_content, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (session_id, role, content, image_path, file_name, file_path, file_content, time.time()),
+                "INSERT INTO messages (session_id, role, content, image_path, file_name, file_path, file_content, agent_id, agent_result, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, role, content, image_path, file_name, file_path, file_content, agent_id, json.dumps(agent_result, ensure_ascii=False) if agent_result else None, time.time()),
             )
             conn.commit()
             return cur.lastrowid
@@ -556,17 +575,25 @@ def get_session_messages(session_id: str, limit: int = 20) -> list[dict]:
     Returns:
         list[dict]: 消息列表（OpenAI 格式兼容）
     """
+    import json
     conn = _get_db()
     try:
         rows = conn.execute(
-            "SELECT id, role, content, image_path, file_name, file_path, file_content, created_at "
+            "SELECT id, role, content, image_path, file_name, file_path, file_content, agent_id, agent_result, created_at "
             "FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
             (session_id, limit),
         ).fetchall()
         # 返回正序（旧 -> 新）
         rows = list(reversed(rows))
-        return [
-            {
+        result = []
+        for r in rows:
+            agent_result = r[8]
+            if agent_result and isinstance(agent_result, str):
+                try:
+                    agent_result = json.loads(agent_result)
+                except (json.JSONDecodeError, TypeError):
+                    agent_result = None
+            result.append({
                 "id": r[0],
                 "role": r[1],
                 "content": r[2],
@@ -574,10 +601,11 @@ def get_session_messages(session_id: str, limit: int = 20) -> list[dict]:
                 "file_name": r[4],
                 "file_path": r[5],
                 "file_content": r[6],
-                "timestamp": r[7],
-            }
-            for r in rows
-        ]
+                "agent_id": r[7],
+                "agent_result": agent_result,
+                "timestamp": r[9],
+            })
+        return result
     finally:
         conn.close()
 

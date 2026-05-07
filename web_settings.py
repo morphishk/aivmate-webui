@@ -62,6 +62,22 @@ def load_config():
     if 'qwentts_voice' not in cfg:
         cfg['qwentts_voice'] = 'ono_anna'
         changed = True
+    # 向后兼容：Agent WebUI 持久化开关配置
+    if 'agent_websearch' not in cfg:
+        cfg['agent_websearch'] = 'off'
+        changed = True
+    if 'agent_ase' not in cfg:
+        cfg['agent_ase'] = 'off'
+        changed = True
+    if 'agent_face' not in cfg:
+        cfg['agent_face'] = 'off'
+        changed = True
+    if 'agent_weather' not in cfg:
+        cfg['agent_weather'] = 'off'
+        changed = True
+    if 'agent_news' not in cfg:
+        cfg['agent_news'] = 'off'
+        changed = True
     if changed:
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
