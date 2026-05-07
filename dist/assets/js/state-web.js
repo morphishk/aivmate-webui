@@ -1,4 +1,36 @@
         document.addEventListener('DOMContentLoaded', function() {
+            // ===== 全局错误过滤：屏蔽外部注入脚本（如浏览器插件、webpack打包的监控SDK）的错误 =====
+            function _isExternalScriptError(source) {
+                if (!source) return false;
+                return source.includes('dp.js') ||
+                       source.includes('chrome-extension') ||
+                       source.includes('moz-extension') ||
+                       source.includes('webpack://') ||
+                       source.includes('blob:');
+            }
+            window.addEventListener('error', function(e) {
+                const filename = e.filename || '';
+                if (_isExternalScriptError(filename)) {
+                    e.preventDefault();
+                    console.warn('[GlobalError] 已过滤外部脚本错误:', filename, e.message);
+                    return false;
+                }
+            }, true);
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.stack && _isExternalScriptError(e.reason.stack)) {
+                    e.preventDefault();
+                    console.warn('[GlobalError] 已过滤外部脚本 Promise 错误:', e.reason);
+                    return false;
+                }
+            }, true);
+            window.onerror = function(message, source, lineno, colno, error) {
+                if (_isExternalScriptError(source)) {
+                    console.warn('[GlobalError] 已过滤外部脚本错误:', source, message);
+                    return true; // true = 阻止默认处理（不在控制台显示红色错误）
+                }
+                return false; // false = 继续默认处理
+            };
+
             // ===== 错误边界与工具函数 =====
             function showToast(message) {
                 let toast = document.getElementById('api-toast');
@@ -2308,7 +2340,13 @@
             function loadCharIframe(type) {
                 const url = getCharUrl(type);
                 if (!url) return;
+                // 重置 loading 状态
                 charLoading.style.display = 'flex';
+                charLoading.innerHTML = '<div class="char-loading-spinner"></div><span>加载角色中...</span>';
+                if (charLoadTimer) { clearTimeout(charLoadTimer); charLoadTimer = null; }
+                charLoadTimer = setTimeout(function() {
+                    setCharLoadError('角色页面加载超时');
+                }, 10000);
                 const currentSrc = charIframe.getAttribute('src') || '';
                 if (currentSrc === '' || currentSrc === 'about:blank') {
                     charIframe.src = url;
@@ -2327,10 +2365,32 @@
                 });
             }
 
+            // 角色 iframe 加载状态管理
+            let charLoadTimer = null;
+            function setCharLoadError(msg) {
+                charLoading.innerHTML = '<div style="color:#ff6b6b;font-size:13px;text-align:center;padding:20px;">' +
+                    '<div>⚠️ ' + msg + '</div>' +
+                    '<div style="color:#88bbdd;font-size:12px;margin-top:8px;">请检查 Live2D/MMD/VRM 服务是否已启动</div>' +
+                    '</div>';
+            }
             charIframe.addEventListener('load', function() {
+                if (charLoadTimer) { clearTimeout(charLoadTimer); charLoadTimer = null; }
                 if (charIframe.src && charIframe.src !== 'about:blank') {
                     charLoading.style.display = 'none';
+                    // 检查 iframe 是否真正加载了有效内容
+                    try {
+                        const iframeDoc = charIframe.contentDocument || (charIframe.contentWindow && charIframe.contentWindow.document);
+                        if (iframeDoc && iframeDoc.body && iframeDoc.body.innerHTML.trim() === '') {
+                            setCharLoadError('角色页面返回空内容');
+                        }
+                    } catch (e) {
+                        // 跨域时无法访问，忽略
+                    }
                 }
+            });
+            charIframe.addEventListener('error', function() {
+                if (charLoadTimer) { clearTimeout(charLoadTimer); charLoadTimer = null; }
+                setCharLoadError('角色页面加载失败');
             });
 
             charTabs.forEach(function(tab) {

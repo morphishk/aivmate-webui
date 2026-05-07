@@ -301,14 +301,27 @@ vrm_web_template = '''
                 rightUpperArm.rotation.z = THREE.MathUtils.lerp(rightUpperArm.rotation.z, Math.PI/2.5, deltaTime * 3);
             }
         }
-        // 检查音频播放状态
+        // 检查音频播放状态（连续失败3次后停止，避免控制台刷屏）
+        let audioCheckFailCount = 0;
+        const MAX_AUDIO_CHECK_FAIL = 3;
         async function checkAudioPlaying() {
             try {
                 const response = await fetch('is_audio_playing');
                 const data = await response.json();
                 isSpeaking = data.is_playing;
+                audioCheckFailCount = 0; // 成功时重置
             } catch (error) {
-                console.error('检测音频播放状态失败:', error);
+                audioCheckFailCount++;
+                if (audioCheckFailCount <= MAX_AUDIO_CHECK_FAIL) {
+                    console.warn('[VRM] is_audio_playing 请求失败 (' + audioCheckFailCount + '/' + MAX_AUDIO_CHECK_FAIL + '):', error.message);
+                }
+                if (audioCheckFailCount === MAX_AUDIO_CHECK_FAIL) {
+                    console.warn('[VRM] is_audio_playing 连续失败 ' + MAX_AUDIO_CHECK_FAIL + ' 次，已停止轮询。请检查 VRM 服务是否正常运行。');
+                    if (audioCheckIntervalId) {
+                        clearInterval(audioCheckIntervalId);
+                        audioCheckIntervalId = null;
+                    }
+                }
             }
         }
         // 加载默认模型
@@ -522,8 +535,8 @@ vrm_web_template = '''
             console.log(`开始互动: ${type}`);
         }
         animate();
-        // 定时检查音频播放状态（每200ms）
-        setInterval(checkAudioPlaying, 200);
+        // 定时检查音频播放状态（每200ms，连续失败3次后自动停止）
+        let audioCheckIntervalId = setInterval(checkAudioPlaying, 200);
         // 窗口大小调整
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;

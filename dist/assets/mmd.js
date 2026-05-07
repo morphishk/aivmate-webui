@@ -69,15 +69,26 @@ function init() {
             console.error('加载模型时出错', error);
         }
     );
-    // 每隔100毫秒读取API
-    setInterval(() => {
+    // 每隔100毫秒读取API（连续失败3次后停止，避免控制台刷屏）
+    let mouthYFailCount = 0;
+    const MAX_MOUTH_Y_FAIL = 3;
+    let mouthYIntervalId = setInterval(() => {
         fetch('api/get_mouth_y')
             .then(response => response.json())
             .then(data => {
                 mouthYValue = parseFloat(data.y);
+                mouthYFailCount = 0; // 成功时重置
             })
             .catch(error => {
-                console.error('Error fetching mouth_y:', error);
+                mouthYFailCount++;
+                if (mouthYFailCount <= MAX_MOUTH_Y_FAIL) {
+                    console.warn('[MMD] api/get_mouth_y 请求失败 (' + mouthYFailCount + '/' + MAX_MOUTH_Y_FAIL + '):', error.message);
+                }
+                if (mouthYFailCount === MAX_MOUTH_Y_FAIL) {
+                    console.warn('[MMD] api/get_mouth_y 连续失败 ' + MAX_MOUTH_Y_FAIL + ' 次，已停止轮询。请检查 MMD 服务是否正常运行。');
+                    clearInterval(mouthYIntervalId);
+                    mouthYIntervalId = null;
+                }
             });
     }, 100);
 }
